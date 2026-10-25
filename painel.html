@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Painel TSE × Boletins</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: duas colunas espelhadas (contagem oficial × soma dos boletins), projeção, gráfico no tempo e tabela por estado. */
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --fg: #141820; --muted: #5a6272; --line: #dce1e8; --tile: #e4e8ee;
+  --c13: #c42b2b; --c22: #1f52c9; --bu: #0d7a6f; --proj: #8a5a00; --live: #0d8a4f; --err: #b3261e;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0e1116; --surface: #161a21; --fg: #e7eaf0; --muted: #98a1b0; --line: #2a303a; --tile: #222833;
+    --c13: #ee5a54; --c22: #5d8ef2; --bu: #3cc4b4; --proj: #e0a93a; --live: #3ccf8e; --err: #f2867e; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0e1116; --surface: #161a21; --fg: #e7eaf0; --muted: #98a1b0; --line: #2a303a; --tile: #222833;
+  --c13: #ee5a54; --c22: #5d8ef2; --bu: #3cc4b4; --proj: #e0a93a; --live: #3ccf8e; --err: #f2867e; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2 { font-family: var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+a { color: inherit; }
+.topo { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topo .wrap { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding-block: 10px; }
+.topo h1 { font-size: 20px; margin-right: auto; }
+.topo nav { display: flex; gap: 12px; font-size: 13px; color: var(--muted); }
+.estado { font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--live); }
+.estado[data-s="velho"] .ponto { background: var(--err); }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+main .wrap { display: flex; flex-direction: column; gap: 20px; padding-block: 20px 44px; }
+.duas { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.caixa { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.caixa h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; font-family: var(--body); }
+.fonte { display: flex; align-items: center; gap: 8px; }
+.fonte i { width: 10px; height: 10px; border-radius: 2px; background: var(--cor); }
+.placar-num { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.placar-num div { display: flex; flex-direction: column; }
+.placar-num .dir { text-align: right; }
+.placar-num b { font-family: var(--display); font-size: clamp(32px, 6vw, 52px); line-height: 1; font-variant-numeric: tabular-nums; }
+.placar-num span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.l { color: var(--c13); } .f { color: var(--c22); }
+.barra { position: relative; height: 10px; border-radius: 3px; overflow: hidden; display: flex; background: var(--tile); }
+.barra i { display: block; height: 100%; }
+.barra .meio { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--fg); opacity: .5; }
+.info { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--muted); }
+.info b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.compara { font-size: 14px; }
+.compara b { font-variant-numeric: tabular-nums; }
+svg text { fill: var(--muted); font: 11px var(--body); }
+.leg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.leg span { display: inline-flex; align-items: center; gap: 6px; }
+.leg i { width: 16px; height: 3px; display: inline-block; background: var(--cor); }
+.rolagem { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+th.grupo { text-align: center; border-bottom: 0; }
+.vazio { color: var(--muted); }
+.nota { font-size: 13px; color: var(--muted); max-width: 80ch; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 5px 12px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.mapa-paises { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; align-items: start; }
+.mapa { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; max-width: 460px; margin: 0 auto; }
+.tile { aspect-ratio: 1; border-radius: 4px; background: var(--tile); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; color: var(--fg); padding: 2px; min-width: 0; }
+.tile b { font-family: var(--display); font-size: clamp(11px, 2.3vw, 15px); }
+.tile span { font-size: clamp(9px, 1.7vw, 11px); font-variant-numeric: tabular-nums; }
+.tile.claro { color: #fff; }
+.pais-cor { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+@media (max-width: 700px) { .duas, .mapa-paises { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="topo"><div class="wrap">
+  <h1>Painel TSE × Boletins</h1>
+  <nav><a href="./">Apuração</a><a href="analise.html">Raio-X</a></nav>
+  <div class="estado" id="estado"><span class="ponto"></span><span id="estado-txt">Carregando…</span></div>
+</div></header>
+<main><div class="wrap">
+  <div class="duas">
+    <section class="caixa" id="tse"></section>
+    <section class="caixa" id="bu"></section>
+  </div>
+  <section class="caixa" id="proj"></section>
+  <section class="caixa">
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between">
+      <h2>Mapa: quem lidera onde</h2>
+      <div class="seg" role="group" aria-label="Fonte do mapa" id="fonte-mapa">
+        <button type="button" data-f="tse" aria-pressed="true">TSE</button><button type="button" data-f="bu" aria-pressed="false">Boletins</button>
+      </div>
+    </div>
+    <div class="mapa-paises">
+      <div><div class="mapa" id="mapa"></div>
+        <div class="leg" style="justify-content:center;margin-top:10px"><span style="--cor:var(--c13)"><i style="height:8px;width:24px"></i>Lula na frente</span><span style="--cor:var(--c22)"><i style="height:8px;width:24px"></i>Flávio na frente</span><span>cor mais forte = vantagem maior</span></div>
+      </div>
+      <div class="paises"><h2 style="margin-bottom:6px">Exterior, por país</h2><div class="rolagem" style="max-height:470px;overflow-y:auto"><table id="paises"></table></div></div>
+    </div>
+  </section>
+  <section class="caixa">
+    <h2>Lula nos votos válidos, ao longo da noite</h2>
+    <div class="leg">
+      <span style="--cor:var(--fg)"><i></i>TSE (oficial)</span>
+      <span style="--cor:var(--bu)"><i></i>Boletins, total</span>
+      <span style="--cor:var(--bu)"><i style="background:repeating-linear-gradient(90deg,var(--bu) 0 4px,transparent 4px 7px)"></i>Boletins, só Brasil</span>
+      <span style="--cor:var(--proj)"><i></i>Projeção</span>
+    </div>
+    <div id="grafico"></div>
+  </section>
+  <section class="caixa">
+    <h2>O que já foi apurado, e de onde</h2>
+    <p class="nota" style="margin:0">Se uma região pesa mais no que já foi apurado do que no eleitorado, o placar parcial puxa para o lado dela.</p>
+    <div class="rolagem"><table id="regioes"></table></div>
+  </section>
+  <div class="duas">
+    <section class="caixa">
+      <h2>Cidades com mais boletins somados</h2>
+      <div class="rolagem"><table id="cidades"></table></div>
+    </section>
+    <section class="caixa">
+      <h2>Últimos boletins lidos</h2>
+      <div class="rolagem"><table id="recentes"></table></div>
+    </section>
+  </div>
+  <section class="caixa">
+    <h2>Por estado</h2>
+    <div class="rolagem"><table id="tab"></table></div>
+  </section>
+  <p class="nota">Duas contagens independentes do mesmo voto. A coluna oficial é a totalização do TSE. A outra soma, por conta própria, os boletins de urna que o TSE publica seção por seção: cada boletim é o resultado impresso pela própria urna. No começo as duas medem conjuntos diferentes de seções e divergem; perto do fim devem convergir. A projeção usa as cidades já totalizadas e o voto de 1º turno das que faltam. Atualiza a cada 30 segundos.</p>
+</div></main>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = new Intl.NumberFormat('pt-BR');
+const P = (v, c = 2) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c }).format(v) + '%';
+const pct = (a, b) => b ? a / b * 100 : null;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let ultima = null;
+
+async function j(url) { const r = await fetch(url + '?v=' + Date.now(), { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); }
+
+function placar(titulo, cor, l, f, info) {
+  const v = l + f, pl = pct(l, v), pf = pct(f, v);
+  return `<h2 class="fonte" style="--cor:${cor}"><i></i>${titulo}</h2>
+    ${v ? `<div class="placar-num"><div><b class="l">${P(pl)}</b><span>Lula · ${fmt.format(l)}</span></div>
+      <div class="dir"><b class="f">${P(pf)}</b><span>Flávio · ${fmt.format(f)}</span></div></div>
+      <div class="barra"><i style="width:${pl}%;background:var(--c13)"></i><i style="flex:1;background:var(--c22)"></i><span class="meio"></span></div>`
+      : '<p class="vazio">Sem votos ainda.</p>'}
+    <div class="info">${info}</div>`;
+}
+
+function render(e, m, h) {
+  const t = e.tse || {};
+  $('tse').innerHTML = placar('Totalização oficial do TSE', 'var(--fg)', t.lula || 0, t.flavio || 0,
+    `<span>Seções <b>${P(t.pst || 0)}</b> (${fmt.format(t.secoes || 0)} de ${fmt.format(t.total_secoes || 0)})</span>
+     <span>Brancos <b>${fmt.format(t.brancos || 0)}</b> · nulos <b>${fmt.format(t.nulos || 0)}</b></span>
+     ${t.eleito?.length ? `<span>TSE declarou eleito: <b>${esc(t.eleito.join(', '))}</b></span>` : ''}`);
+  const g = e.bu.global, b = e.bu.brasil, x = e.bu.exterior;
+  const vb = b.lula + b.flavio, vx = x.lula + x.flavio;
+  $('bu').innerHTML = placar('Soma dos boletins de urna', 'var(--bu)', g.lula, g.flavio,
+    `<span>Boletins somados <b>${fmt.format(e.lidos)}</b> de ${fmt.format(e.publicados)} publicados${e.fila ? ` · ${fmt.format(e.fila)} na fila` : ''}</span>
+     <span>Só Brasil: <b>${vb ? P(pct(b.lula, vb)) + ' × ' + P(pct(b.flavio, vb)) : '—'}</b> (${fmt.format(b.secoes)} seções)</span>
+     <span>Exterior: <b>${vx ? P(pct(x.lula, vx)) + ' × ' + P(pct(x.flavio, vx)) : '—'}</b> (${fmt.format(x.secoes)} seções)</span>`);
+
+  if (m && m.proj_lula != null) {
+    const p = m.proj_lula, er = 1.96 * m.erro, mt = m.matriz || {};
+    $('proj').innerHTML = `<h2 class="fonte" style="--cor:var(--proj)"><i></i>Projeção do resultado final</h2>
+      <div class="placar-num"><div><b class="l">${P(p, 1)}</b><span>Lula · entre ${P(p - er, 1)} e ${P(p + er, 1)}</span></div>
+        <div class="dir"><b class="f">${P(100 - p, 1)}</b><span>Flávio · entre ${P(100 - p - er, 1)} e ${P(100 - p + er, 1)}</span></div></div>
+      <div class="info"><span>Base: <b>${fmt.format(m.cidades)}</b> cidades totalizadas (${P(m.frac_eleit, 1)} do eleitorado)</span>
+      <span>Para onde foram, Lula/Flávio: ${['Cury', 'Renan', 'Caiado', 'Zema'].filter(k => mt[k]).map(k => `${k} <b>${Math.round(mt[k][0])}/${Math.round(mt[k][1])}</b>`).join(' · ')}</span></div>`;
+  } else {
+    $('proj').innerHTML = `<h2 class="fonte" style="--cor:var(--proj)"><i></i>Projeção do resultado final</h2>
+      <p class="vazio">Aparece quando houver 150 cidades totalizadas${m ? ` (agora: ${fmt.format(m.cidades || 0)})` : ''}.</p>`;
+  }
+  renderGrafico(h);
+  renderMapa(e, m);
+  renderOrigem(e, m);
+  renderTabela(e, m);
+}
+
+const REGIAO = { ac: 'Norte', am: 'Norte', ap: 'Norte', pa: 'Norte', ro: 'Norte', rr: 'Norte', to: 'Norte',
+  al: 'Nordeste', ba: 'Nordeste', ce: 'Nordeste', ma: 'Nordeste', pb: 'Nordeste', pe: 'Nordeste', pi: 'Nordeste', rn: 'Nordeste', se: 'Nordeste',
+  df: 'Centro-Oeste', go: 'Centro-Oeste', ms: 'Centro-Oeste', mt: 'Centro-Oeste',
+  es: 'Sudeste', mg: 'Sudeste', rj: 'Sudeste', sp: 'Sudeste', pr: 'Sul', rs: 'Sul', sc: 'Sul', zz: 'Exterior' };
+const MOSAICO = { rr: [1, 0], ap: [3, 0], am: [1, 1], pa: [2, 1], ma: [3, 1], ce: [4, 1], rn: [5, 1], ac: [0, 2], ro: [1, 2], to: [2, 2], pi: [3, 2],
+  pe: [4, 2], pb: [5, 2], mt: [1, 3], go: [2, 3], ba: [3, 3], se: [4, 3], al: [5, 3], ms: [1, 4], df: [2, 4], mg: [3, 4], es: [4, 4],
+  pr: [1, 5], sp: [2, 5], rj: [3, 5], sc: [1, 6], rs: [1, 7] };
+// cidade do exterior (código TSE) -> país
+const PAIS = (() => {
+  const t = {
+    'Estados Unidos': '39080 29416 29513 30902 29807 29980 30112 30228 99490 30503 30783', 'Canadá': '30155 30252 30635 39063',
+    'Portugal': '30961 29955 30341', 'Espanha': '29351 30066', 'França': '99511 30287 29475 99333', 'Itália': '30120 30449',
+    'Alemanha': '29386 29696 30180', 'Reino Unido': '99503 29971', 'Suíça': '29700 30864', 'Japão': '29742 30198 30627',
+    'China': '30651 30317 30848', 'Hong Kong': '29793', 'Argentina': '29467 29602 39004 30295 99155', 'Paraguai': '29327 29556 29580 29670 30309 30465',
+    'Uruguai': '29319 29521 30147 30430 99244', 'Bolívia': '99210 29572 29904 99236 30473', 'Venezuela': '29505 29564 99279', 'Peru': '29823 29947',
+    'Chile': '30481', 'Colômbia': '29408', 'Equador': '30392', 'Guiana': '29718', 'Suriname': '30279', 'México': '30104', 'Cuba': '29777',
+    'Panamá': '30260', 'Costa Rica': '30511', 'El Salvador': '30520', 'Guatemala': '98000', 'Honduras': '30600', 'Nicarágua': '30074',
+    'Belize': '38881', 'Rep. Dominicana': '30490', 'Haiti': '30333', 'Jamaica': '99430', 'Bahamas': '99180', 'Barbados': '29424',
+    'Santa Lúcia': '99384', 'Antígua e Barbuda': '99147', 'Trinidad e Tobago': '30325', 'Granada': '', 'Países Baixos': '30457',
+    'Bélgica': '29432', 'Irlanda': '29661', 'Áustria': '30767', 'Dinamarca': '29599', 'Suécia': '29688', 'Noruega': '30244', 'Finlândia': '29785',
+    'Polônia': '30740', 'Tchéquia': '30350', 'Eslováquia': '39209', 'Hungria': '29459', 'Romênia': '29440', 'Bulgária': '30546', 'Grécia': '29335',
+    'Chipre': '39322', 'Sérvia': '29378', 'Croácia': '39020', 'Eslovênia': '39160', 'Bósnia': '30988', 'Albânia': '99139', 'Ucrânia': '29858',
+    'Rússia': '30163', 'Estônia': '99317', 'Geórgia': '99104', 'Armênia': '38989', 'Azerbaijão': '39128', 'Cazaquistão': '39241', 'Turquia': '29297 39306',
+    'Israel': '30619', 'Palestina': '30414', 'Líbano': '29360', 'Síria': '29637', 'Jordânia': '29289', 'Iraque': '99171', 'Irã': '30597',
+    'Arábia Saudita': '30422', 'Emirados Árabes': '29262', 'Catar': '29653', 'Kuwait': '29882', 'Bahrein': '99473', 'Omã': '39102',
+    'Egito': '29483', 'Líbia': '30686', 'Tunísia': '30708', 'Argélia': '29300', 'Marrocos': '30406', 'Índia': '30171 30210', 'Paquistão': '29831',
+    'Bangladesh': '29629', 'Sri Lanka': '30929', 'Nepal': '29173', 'Tailândia': '29343', 'Vietnã': '29750', 'Malásia': '29890', 'Singapura': '29548',
+    'Indonésia': '29840', 'Filipinas': '30082', 'Mianmar': '99376', 'Timor-Leste': '29645', 'Coreia do Sul': '30538', 'Coreia do Norte': '99295',
+    'Taiwan': '30570', 'Austrália': '29491 30562', 'Nova Zelândia': '30805', 'Angola': '29998', 'Moçambique': '30090', 'Cabo Verde': '30368',
+    'Guiné-Bissau': '29394', 'São Tomé e Príncipe': '39225', 'África do Sul': '29530 30376', 'Nigéria': '99198 29912', 'Gana': '29270',
+    'Costa do Marfim': '29254', 'Senegal': '29610', 'Mali': '99350', 'Burkina Faso': '39284', 'Guiné': '38903', 'Benin': '38920', 'Togo': '29963',
+    'Camarões': '29815', 'Gabão': '29939', 'Guiné Equatorial': '39263', 'Congo': '39187', 'RD Congo': '29874', 'Etiópia': '99325', 'Quênia': '30201',
+    'Tanzânia': '38962', 'Zâmbia': '99287', 'Malawi': '99341', 'Zimbábue': '29769', 'Botsuana': '30669', 'Namíbia': '30821'
+  };
+  const m = {}; Object.entries(t).forEach(([p, cs]) => cs.split(' ').filter(Boolean).forEach(c => { m[c] = p; })); return m;
+})();
+let fonteMapa = 'tse', ultimo = null;
+document.getElementById('fonte-mapa').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return; fonteMapa = b.dataset.f;
+  document.querySelectorAll('#fonte-mapa button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  if (ultimo) renderMapa(...ultimo);
+});
+function tom(l, f) {
+  const v = l + f; if (!v) return { bg: 'var(--tile)', claro: false, txt: '—' };
+  const pl = l / v * 100, lider = pl >= 50 ? 'var(--c13)' : 'var(--c22)', share = Math.max(pl, 100 - pl);
+  const k = Math.round(Math.min(1, Math.max(0.2, (share - 50) / 20)) * 100);
+  return { bg: `color-mix(in oklab, ${lider} ${k}%, var(--tile))`, claro: k >= 55, txt: P(Math.max(pl, 100 - pl), 1).replace(',0%', '%') };
+}
+function renderMapa(e, m) {
+  ultimo = [e, m];
+  const tufs = (m && m.ufs) || {};
+  $('mapa').innerHTML = Object.entries(MOSAICO).map(([u, [c, r]]) => {
+    let l = 0, f = 0;
+    if (fonteMapa === 'tse') { const t = tufs[u]; if (t) { l = t.y[0]; f = t.y[1]; } }
+    else { const b = e.bu.ufs[u]; if (b) { l = b.lula; f = b.flavio; } }
+    const t = tom(l, f), quem = !l && !f ? '' : (l >= f ? 'Lula' : 'Flávio');
+    return `<div class="tile${t.claro ? ' claro' : ''}" style="grid-column:${c + 1};grid-row:${r + 1};background:${t.bg}" title="${u.toUpperCase()}${quem ? ': ' + quem + ' ' + t.txt : ''}"><b>${u.toUpperCase()}</b><span>${t.txt}</span></div>`;
+  }).join('');
+  // países: TSE quando já houver voto totalizado; senão, soma dos boletins
+  const tz = (m && m.exterior_tse) || {}, bz = e.bu.exterior_cidades || {};
+  const paises = {};
+  Object.keys(PAIS).forEach(cd => {
+    const p = paises[PAIS[cd]] ||= { l: 0, f: 0, fonte: new Set() };
+    const t = tz[cd], b = bz[cd];
+    if (fonteMapa === 'tse' && t && t[0] + t[1]) { p.l += t[0]; p.f += t[1]; p.fonte.add('TSE'); }
+    else if (b && b[0] + b[1]) { p.l += b[0]; p.f += b[1]; p.fonte.add('boletins'); }
+  });
+  const lista = Object.entries(paises).filter(([, p]) => p.l + p.f).sort((a, b) => (b[1].l + b[1].f) - (a[1].l + a[1].f));
+  $('paises').innerHTML = lista.length ? `<thead><tr><th>País</th><th>Lula</th><th>Flávio</th><th>Votos</th></tr></thead><tbody>` +
+    lista.map(([n, p]) => { const v = p.l + p.f, t = tom(p.l, p.f);
+      return `<tr><td><span class="pais-cor" style="background:${t.bg}"></span>${esc(n)}${p.fonte.has('boletins') && fonteMapa === 'tse' ? ' <span class="vazio">(bol.)</span>' : ''}</td>
+        <td>${P(p.l / v * 100, 1)}</td><td>${P(p.f / v * 100, 1)}</td><td>${fmt.format(v)}</td></tr>`; }).join('') + '</tbody>'
+    : '<tr><td class="vazio">Nenhum voto do exterior ainda.</td></tr>';
+}
+const ORDEM_REG =['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul', 'Exterior'];
+const UFN = u => u === 'zz' ? 'Exterior' : u.toUpperCase();
+
+function renderOrigem(e, m) {
+  const tufs = (m && m.ufs) || {};
+  const r = Object.fromEntries(ORDEM_REG.map(k => [k, { te: 0, tv: 0, tl: 0, tf: 0, bv: 0, bl: 0, bf: 0, bs: 0 }]));
+  Object.entries(tufs).forEach(([u, t]) => {
+    const a = r[REGIAO[u]]; if (!a) return;
+    a.te += t.te || 0; a.tv += t.y[0] + t.y[1]; a.tl += t.y[0]; a.tf += t.y[1];
+  });
+  Object.entries(e.bu.ufs).forEach(([u, b]) => { const a = r[REGIAO[u]]; if (!a) return; a.bv += b.lula + b.flavio; a.bl += b.lula; a.bs += b.secoes; });
+  const T = k => ORDEM_REG.reduce((s, g) => s + r[g][k], 0);
+  const te = T('te'), tv = T('tv'), bv = T('bv');
+  const cel = (part, tot) => tot ? P(part / tot * 100, 1) : '—';
+  $('regioes').innerHTML = `<thead><tr><th></th><th></th><th class="grupo" colspan="2">TSE</th><th class="grupo" colspan="3">Boletins</th></tr>
+    <tr><th>Região</th><th>Peso no eleitorado</th><th>Peso no apurado</th><th>Lula ali</th><th>Seções</th><th>Peso nos lidos</th><th>Lula ali</th></tr></thead><tbody>` +
+    ORDEM_REG.map(g => { const a = r[g];
+      return `<tr><td>${g}</td><td>${cel(a.te, te)}</td><td>${cel(a.tv, tv)}</td><td>${a.tv ? P(a.tl / a.tv * 100) : '—'}</td>
+        <td>${fmt.format(a.bs)}</td><td>${cel(a.bv, bv)}</td><td>${a.bv ? P(a.bl / a.bv * 100) : '—'}</td></tr>`; }).join('') + '</tbody>';
+  const cid = e.bu.municipios || [];
+  $('cidades').innerHTML = cid.length ? `<thead><tr><th>Cidade</th><th>Seções</th><th>Lula</th><th>Flávio</th></tr></thead><tbody>` +
+    cid.map(c => { const v = c.lula + c.flavio; return `<tr><td>${esc(c.nome)} <span class="vazio">${UFN(c.uf)}</span></td><td>${fmt.format(c.secoes)}</td>
+      <td>${v ? P(c.lula / v * 100, 1) : '—'}</td><td>${v ? P(c.flavio / v * 100, 1) : '—'}</td></tr>`; }).join('') +
+    `</tbody><caption class="vazio" style="caption-side:bottom;text-align:left;padding-top:6px;font-size:12.5px">${fmt.format(e.bu.n_municipios || 0)} cidades com algum boletim somado</caption>` : '<tr><td class="vazio">Nenhum ainda.</td></tr>';
+  const rec = e.recentes || [];
+  $('recentes').innerHTML = rec.length ? `<thead><tr><th>Local</th><th>Zona/seção</th><th>Lula</th><th>Flávio</th><th>Br/Nu</th></tr></thead><tbody>` +
+    rec.map(b => `<tr><td>${esc(b.nome)} <span class="vazio">${UFN(b.uf)}</span></td><td class="mono">${b.zona}/${b.secao}</td>
+      <td>${fmt.format(b.lula)}</td><td>${fmt.format(b.flavio)}</td><td>${fmt.format(b.brancos)}/${fmt.format(b.nulos)}</td></tr>`).join('') + '</tbody>' : '<tr><td class="vazio">Nenhum ainda.</td></tr>';
+}
+
+function renderGrafico(h) {
+  const pts = h.filter(p => p.tse_lula != null || p.bu_lula != null);
+  if (pts.length < 2) { $('grafico').innerHTML = '<p class="vazio">O gráfico começa a partir da segunda leitura.</p>'; return; }
+  const seg = s => { const [a, b, c] = s.split(':').map(Number); return a * 3600 + b * 60 + c; };
+  const W = 1000, H = 280, ml = 44, mr = 12, mt = 12, mb = 26;
+  const t0 = seg(pts[0].hora), t1 = Math.max(seg(pts[pts.length - 1].hora), t0 + 60);
+  const vals = pts.flatMap(p => [p.tse_lula, p.bu_lula, p.bu_br_lula, p.proj_lula].filter(v => v != null));
+  let lo = Math.floor(Math.min(45, ...vals) - 1), hi = Math.ceil(Math.max(55, ...vals) + 1);
+  const X = s => ml + (seg(s) - t0) / (t1 - t0) * (W - ml - mr), Y = v => mt + (hi - v) / (hi - lo) * (H - mt - mb);
+  const linha = (k, cor, extra = '') => { const q = pts.filter(p => p[k] != null); return q.length ? `<polyline fill="none" stroke="${cor}" stroke-width="2" ${extra} points="${q.map(p => `${X(p.hora).toFixed(1)},${Y(p[k]).toFixed(1)}`).join(' ')}"/>` : ''; };
+  const banda = pts.filter(p => p.proj_lula != null);
+  const area = banda.length ? `<polygon fill="var(--proj)" opacity=".15" points="${banda.map(p => `${X(p.hora)},${Y(p.proj_lula + 1.96 * p.proj_erro)}`).concat(banda.slice().reverse().map(p => `${X(p.hora)},${Y(p.proj_lula - 1.96 * p.proj_erro)}`)).join(' ')}"/>` : '';
+  let grade = '';
+  for (let v = Math.ceil(lo); v <= hi; v += (hi - lo > 12 ? 5 : 2)) grade += `<line x1="${ml}" x2="${W - mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml - 6}" y="${Y(v) + 4}" text-anchor="end">${v}%</text>`;
+  const ticks = [pts[0], pts[Math.floor(pts.length / 2)], pts[pts.length - 1]].map(p => `<text x="${X(p.hora)}" y="${H - 6}" text-anchor="middle">${p.hora.slice(0, 5)}</text>`).join('');
+  $('grafico').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Percentual de Lula ao longo do tempo">
+    ${grade}<line x1="${ml}" x2="${W - mr}" y1="${Y(50)}" y2="${Y(50)}" stroke="var(--fg)" stroke-dasharray="4 4" opacity=".6"/>
+    ${area}${linha('proj_lula', 'var(--proj)')}${linha('bu_br_lula', 'var(--bu)', 'stroke-dasharray="6 4"')}${linha('bu_lula', 'var(--bu)')}${linha('tse_lula', 'var(--fg)')}${ticks}</svg>`;
+}
+
+function renderTabela(e, m) {
+  const tufs = (m && m.ufs) || {};
+  const ufs = [...new Set([...Object.keys(tufs), ...Object.keys(e.bu.ufs)])].sort();
+  $('tab').innerHTML = `<thead><tr><th></th><th class="grupo" colspan="2">TSE</th><th class="grupo" colspan="2">Boletins</th><th></th></tr>
+    <tr><th>Estado</th><th>Apurado</th><th>Lula</th><th>Seções</th><th>Lula</th><th>Diferença</th></tr></thead><tbody>` +
+    ufs.map(u => {
+      const t = tufs[u], b = e.bu.ufs[u];
+      const tl = t ? pct(t.y[0], t.y[0] + t.y[1]) : null, bl = b ? pct(b.lula, b.lula + b.flavio) : null;
+      return `<tr><td>${u === 'zz' ? 'Exterior' : u.toUpperCase()}</td><td>${t ? P(t.pst, 1) : '—'}</td><td>${tl != null ? P(tl) : '—'}</td>
+        <td>${b ? fmt.format(b.secoes) : '—'}</td><td>${bl != null ? P(bl) : '—'}</td>
+        <td>${tl != null && bl != null ? (bl - tl >= 0 ? '+' : '−') + new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(Math.abs(bl - tl)) : '—'}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+
+async function ciclo() {
+  try {
+    const [e, h, m] = await Promise.all([j('dados/painel-estado.json'), j('dados/painel-historico.json'), j('dados/monitor-estado.json').catch(() => null)]);
+    render(e, m, h); ultima = e.hora;
+    $('estado').dataset.s = ''; $('estado-txt').innerHTML = `Dados das <span class="mono">${esc(e.hora)}</span>`;
+  } catch (err) {
+    $('estado').dataset.s = 'velho'; $('estado-txt').textContent = 'Não consegui ler os dados agora; tento de novo em 30 s.';
+  }
+}
+ciclo(); setInterval(ciclo, 30000);
+</script>
+</body>
+</html>
