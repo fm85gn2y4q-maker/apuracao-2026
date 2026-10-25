@@ -129,7 +129,7 @@ def salvar(tse, publicados, faltam, falhas):
                       "lula": v.get("13", 0), "flavio": v.get("22", 0), "brancos": float(tse["v"]["vb"]),
                       "nulos": float(tse["v"]["vn"]) + float(tse["v"].get("vnt") or 0), "comparecimento": float(tse["e"]["c"]),
                       "eleito": [k["nmu"] for a in tse["carg"][0]["agr"] for p in a["par"] for k in p["cand"] if str(k.get("st", "")).lower().startswith("eleit")],
-                      "totalizado": f"{tse.get('dt', '')} {tse.get('ht', '')}".strip()}
+                      "totalizado": f"{tse.get('dt', '')} {tse.get('ht', '')}".strip(), "gerado": f"{tse.get('dg', '')} {tse.get('hg', '')}"}
     json.dump(est, open(os.path.join(AQUI, "painel-estado.json"), "w", encoding="utf-8"), ensure_ascii=False)
     hist_arq = os.path.join(AQUI, "painel-historico.json")
     hist = json.load(open(hist_arq, encoding="utf-8")) if os.path.exists(hist_arq) else []

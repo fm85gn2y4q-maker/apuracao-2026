@@ -88,6 +88,7 @@ th.grupo { text-align: center; border-bottom: 0; }
   <div class="estado" id="estado"><span class="ponto"></span><span id="estado-txt">Carregando…</span></div>
 </div></header>
 <main><div class="wrap">
+  <div id="aviso-pausa" hidden style="border:1px solid var(--line);border-left:3px solid var(--proj);background:var(--surface);padding:10px 14px;border-radius:4px;font-size:14px"></div>
   <div class="duas">
     <section class="caixa" id="tse"></section>
     <section class="caixa" id="bu"></section>
@@ -160,6 +161,11 @@ function placar(titulo, cor, l, f, info) {
 
 function render(e, m, h) {
   const t = e.tse || {};
+  // aviso quando o TSE para de publicar por mais de 15 minutos
+  const gm = (t.gerado || '').match(/(\d+)\/(\d+)\/(\d+) (\d+):(\d+)/);
+  const parado = gm ? (Date.now() - new Date(+gm[3], gm[2] - 1, +gm[1], +gm[4], +gm[5]).getTime()) / 60000 : 0;
+  $('aviso-pausa').hidden = !(parado > 15);
+  if (parado > 15) $('aviso-pausa').innerHTML = `<b>O TSE não publica dados novos desde as ${gm[4]}h${gm[5]}</b>, há ${Math.round(parado)} minutos. Neste 2º turno, a divulgação foi pausada depois que o STF prorrogou a votação até as 19h. Os números abaixo são os da última publicação; o painel volta a mexer sozinho quando o TSE retomar.`;
   $('tse').innerHTML = placar('Totalização oficial do TSE', 'var(--fg)', t.lula || 0, t.flavio || 0,
     `<span>Seções <b>${P(t.pst || 0)}</b> (${fmt.format(t.secoes || 0)} de ${fmt.format(t.total_secoes || 0)})</span>
      <span>Brancos <b>${fmt.format(t.brancos || 0)}</b> · nulos <b>${fmt.format(t.nulos || 0)}</b></span>
