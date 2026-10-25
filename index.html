@@ -85,6 +85,7 @@ main .wrap { display: flex; flex-direction: column; gap: 28px; padding-block: 24
 .numero { font-family: var(--display); font-weight: 700; font-size: 13px; color: #fff; background: var(--cor); border-radius: 4px; padding: 1px 7px; }
 .nome { font-family: var(--display); font-weight: 600; font-size: 19px; letter-spacing: 0.01em; }
 .frente { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; color: var(--cor); border: 1px solid var(--cor); border-radius: 999px; padding: 0 7px; }
+.frente.eleito { background: var(--cor); color: #fff; }
 .pct { font-family: var(--display); font-weight: 700; font-size: clamp(38px, 6.5vw, 64px); line-height: 1; color: var(--cor); font-variant-numeric: tabular-nums; }
 .votos { font-size: 14px; font-variant-numeric: tabular-nums; }
 .vice { font-size: 12.5px; color: var(--muted); }
@@ -349,7 +350,7 @@ function resumoHTML(d, titulo) {
   const card = (n, v, pc, lado) => {
     const c = d.porN[n] || {};
     return `<div class="cand ${lado}" style="--cor:${cor(n)}">
-      <div class="cand-top"><span class="numero">${esc(n)}</span><span class="nome">${esc(c.nm || nomeCand(n))}</span>${l && l.n === n ? '<span class="frente">à frente</span>' : ''}</div>
+      <div class="cand-top"><span class="numero">${esc(n)}</span><span class="nome">${esc(c.nm || nomeCand(n))}</span>${/^eleit/i.test(c.st || '') ? '<span class="frente eleito">eleito</span>' : l && l.n === n ? '<span class="frente">à frente</span>' : ''}</div>
       <div class="pct">${P(pc)}</div>
       <div class="votos">${fmt.format(v)} votos</div>
       ${c.vice ? `<div class="vice">Vice: ${esc(c.vice)}</div>` : ''}
