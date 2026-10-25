@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Raio-X do 2º Turno</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: mesma identidade da página de apuração; projeção no topo, depois transferência de votos, votos que faltam e comparação por estado. */
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --fg: #141820; --muted: #5a6272; --line: #dce1e8; --tile: #e4e8ee;
+  --c13: #c42b2b; --c22: #1f52c9; --branco: #9aa3b2; --nulo: #6b7280; --abst: #c9ced8;
+  --live: #0d8a4f; --wait: #9a6a00; --err: #b3261e;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --surface: #161a21; --fg: #e7eaf0; --muted: #98a1b0; --line: #2a303a; --tile: #222833;
+    --c13: #ee5a54; --c22: #5d8ef2; --branco: #8b93a3; --nulo: #5d6575; --abst: #3a414d;
+    --live: #3ccf8e; --wait: #e0a93a; --err: #f2867e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --surface: #161a21; --fg: #e7eaf0; --muted: #98a1b0; --line: #2a303a; --tile: #222833;
+  --c13: #ee5a54; --c22: #5d8ef2; --branco: #8b93a3; --nulo: #5d6575; --abst: #3a414d;
+  --live: #3ccf8e; --wait: #e0a93a; --err: #f2867e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1100px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--c22); outline-offset: 2px; }
+.barra { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.barra .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding-block: 10px; }
+.marca { margin-right: auto; display: flex; flex-direction: column; line-height: 1.2; }
+.marca h1 { font-size: 20px; font-weight: 700; }
+.marca a { font-size: 12.5px; color: var(--muted); }
+.estado { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.estado[data-s="vivo"] .ponto { background: var(--live); }
+.estado[data-s="espera"] .ponto { background: var(--wait); }
+.estado[data-s="erro"] .ponto { background: var(--err); }
+.estado b { color: var(--fg); }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+main .wrap { display: flex; flex-direction: column; gap: 26px; padding-block: 22px 48px; }
+.aviso { border: 1px solid var(--line); border-left: 3px solid var(--wait); background: var(--surface); padding: 10px 14px; border-radius: 4px; font-size: 14px; }
+.caixa { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.caixa > header { display: flex; flex-direction: column; gap: 4px; }
+.caixa h2 { font-size: 23px; font-weight: 700; }
+.caixa p.sub { margin: 0; color: var(--muted); font-size: 14px; max-width: 75ch; }
+.proj { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pc { display: flex; flex-direction: column; gap: 2px; }
+.pc.dir { text-align: right; align-items: flex-end; }
+.pc .nome { font-family: var(--display); font-weight: 600; font-size: 18px; }
+.pc .pct { font-family: var(--display); font-weight: 700; font-size: clamp(38px, 7vw, 60px); line-height: 1; color: var(--cor); font-variant-numeric: tabular-nums; }
+.pc .faixa { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.placar { position: relative; height: 12px; border-radius: 3px; background: var(--tile); overflow: hidden; display: flex; }
+.placar i { display: block; height: 100%; }
+.placar .meio { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--fg); opacity: .55; }
+.placar .banda { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, transparent 0 3px, color-mix(in oklab, var(--fg) 35%, transparent) 3px 5px); }
+.linha-info { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--muted); }
+.linha-info b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.rolagem { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.pilha { display: flex; height: 16px; width: 100%; min-width: 220px; border-radius: 3px; overflow: hidden; background: var(--tile); }
+.pilha i { display: block; height: 100%; }
+.leg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.leg span { display: inline-flex; align-items: center; gap: 6px; }
+.leg i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.real { color: var(--muted); font-size: 12px; }
+.destaque { font-family: var(--display); font-size: 21px; font-weight: 600; }
+.delta.pos { color: var(--c13); }
+.delta.neg { color: var(--c22); }
+.vazio { color: var(--muted); }
+details { font-size: 14px; color: var(--muted); }
+details p { max-width: 78ch; }
+footer .wrap { padding-block: 0 32px; font-size: 13px; color: var(--muted); }
+@media (max-width: 560px) { .caixa { padding: 16px; } .pc .nome { font-size: 15px; } th, td { padding: 6px 5px; } }
+</style>
+</head>
+<body>
+<header class="barra">
+  <div class="wrap">
+    <div class="marca">
+      <h1>Raio-X do 2º Turno</h1>
+      <a href="./">← Voltar à apuração</a>
+    </div>
+    <div class="estado" id="estado" data-s=""><span class="ponto"></span><span id="estado-txt">Carregando…</span></div>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+    <div id="avisos"></div>
+
+    <section class="caixa" id="sec-proj">
+      <header>
+        <h2>Projeção do resultado final</h2>
+        <p class="sub">Soma o resultado real das cidades já totalizadas com uma estimativa para as que faltam, feita a partir de como cada uma votou no 1º turno.</p>
+      </header>
+      <div id="proj"></div>
+    </section>
+
+    <section class="caixa">
+      <header>
+        <h2>Para onde foram os votos do 1º turno</h2>
+        <p class="sub">Estimativa da fatia de cada eleitorado do 1º turno que, no 2º, votou em cada candidato, votou branco ou nulo, ou não compareceu. Calculada comparando as cidades já totalizadas.</p>
+      </header>
+      <div class="leg" id="leg-transf"></div>
+      <div class="rolagem"><table id="tab-transf"></table></div>
+    </section>
+
+    <section class="caixa">
+      <header>
+        <h2>Onde estão os votos que faltam</h2>
+        <p class="sub">Eleitorado ainda não totalizado em cada estado e o que ele representa para o resultado.</p>
+      </header>
+      <div id="falta-resumo" class="destaque"></div>
+      <div class="rolagem"><table id="tab-falta"></table></div>
+    </section>
+
+    <section class="caixa">
+      <header>
+        <h2>Comparação com o 1º turno, por estado</h2>
+        <p class="sub">Percentual dos votos válidos de cada um no 1º e no 2º turno, e quanto cada candidato ganhou.</p>
+      </header>
+      <div class="rolagem"><table id="tab-comp"></table></div>
+    </section>
+
+    <details>
+      <summary>Como isso é calculado e quais são os limites</summary>
+      <p>Para cada cidade conhecemos a divisão do eleitorado no 1º turno (cada candidato, brancos, nulos e abstenção) e no 2º. Uma regressão ponderada pelo eleitorado, com a restrição de que as fatias de cada grupo somem 100% e nenhuma seja negativa, estima a matriz de transferência (o método de Goodman, usado em análise eleitoral desde os anos 1950).</p>
+      <p>É inferência ecológica: mostra o padrão médio entre cidades, não o voto de cada pessoa. Se eleitores de um mesmo candidato se comportam de forma diferente conforme a região, a média esconde isso. No começo da apuração, as cidades totalizadas são sobretudo pequenas e de algumas regiões, então a projeção oscila; ela só aparece depois de 300 cidades e 3% do eleitorado. A faixa hachurada vem de reestimar o modelo em metades sorteadas das cidades e medir quanto erra na outra metade.</p>
+      <p>Fonte: arquivos públicos do TSE (eleições 6257 e 6258). Nada aqui é resultado oficial.</p>
+    </details>
+  </div>
+</main>
+<footer><div class="wrap" id="rodape">Dados do TSE lidos direto do seu navegador.</div></footer>
+
+<script>
+const BASE = 'https://resultados.tse.jus.br/oficial/ele2026/6258/';
+const ELE = '006258';
+const INTERVALO = 60;
+const SIMULAR = new URLSearchParams(location.search).get('simular') === '1';
+// origens do 1º turno, na ordem das colunas do JSON (a partir do índice 3 = abstenção)
+const ORIG = [
+  { k: 'abst', nome: 'Abstenção', i: 3 }, { k: 'br', nome: 'Brancos', i: 4 }, { k: 'nu', nome: 'Nulos', i: 5 },
+  { k: '13', nome: 'Lula', i: 6 }, { k: '22', nome: 'Flávio Bolsonaro', i: 7 }, { k: '70', nome: 'Augusto Cury', i: 8 },
+  { k: '14', nome: 'Renan Santos', i: 9 }, { k: '55', nome: 'Ronaldo Caiado', i: 10 }, { k: '30', nome: 'Zema', i: 11 },
+  { k: 'out', nome: 'Demais candidatos', i: 12 }
+];
+const DEST = [
+  { k: '13', nome: 'Lula', cor: 'var(--c13)' }, { k: '22', nome: 'Flávio Bolsonaro', cor: 'var(--c22)' },
+  { k: 'br', nome: 'Branco', cor: 'var(--branco)' }, { k: 'nu', nome: 'Nulo', cor: 'var(--nulo)' }, { k: 'abst', nome: 'Abstenção', cor: 'var(--abst)' }
+];
+const NOME_UF = {};
+const st = { t1: null, t2: {}, uf: {}, br: null, beta: null, proj: null, verdade: null, erro: null, lendo: false, proxima: 0, ultima: null, simPasso: 0 };
+const $ = id => document.getElementById(id);
+const fmt = new Intl.NumberFormat('pt-BR');
+const P1 = v => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(v) + '%';
+const P2 = v => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + '%';
+const num = s => Number(String(s ?? 0).replace(',', '.')) || 0;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function getJSON(url) {
+  const r = await fetch(url, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`TSE respondeu ${r.status}`);
+  return r.json();
+}
+async function emLotes(itens, n, fn) {
+  let i = 0; const out = new Array(itens.length);
+  await Promise.all(Array.from({ length: Math.min(n, itens.length) }, async () => {
+    while (i < itens.length) { const k = i++; try { out[k] = await fn(itens[k]); } catch (e) { out[k] = null; } }
+  }));
+  return out;
+}
+
+// 2º turno de um arquivo -u.json: [eleitorado, Lula, Flávio, brancos, nulos, abstenção]
+function ler2(j) {
+  const v = {}; (j.carg?.[0]?.agr || []).forEach(a => (a.par || []).forEach(p => (p.cand || []).forEach(c => { v[c.n] = num(c.vap); })));
+  return { te: num(j.e?.te), y: [v['13'] || 0, v['22'] || 0, num(j.v?.vb), num(j.v?.vn) + num(j.v?.vnt), num(j.e?.a)],
+           pst: num(j.s?.pst), dt: j.dt, ht: j.ht, and: j.and, tf: j.tf, c: num(j.e?.c), vv: num(j.v?.vv) };
+}
+
+/* ---------- Modelo: regressão de Goodman com restrição de simplex ---------- */
+function projSimplex(v) {
+  const u = v.slice().sort((a, b) => b - a); let css = 0, rho = 0, th = 0;
+  for (let j = 0; j < u.length; j++) { css += u[j]; const t = (css - 1) / (j + 1); if (u[j] - t > 0) { rho = j; th = t; } }
+  return v.map(x => Math.max(0, x - th));
+}
+function ajustar(linhas) {
+  // linhas: {x: [10 frações do eleitorado no 1T], y: [5 frações no 2T], w}
+  const J = ORIG.length, D = DEST.length;
+  const G = Array.from({ length: J }, () => new Array(J).fill(0)), H = Array.from({ length: J }, () => new Array(D).fill(0));
+  for (const { x, y, w } of linhas) {
+    for (let a = 0; a < J; a++) { const wa = w * x[a]; if (!wa) continue;
+      for (let b = 0; b < J; b++) G[a][b] += wa * x[b];
+      for (let d = 0; d < D; d++) H[a][d] += wa * y[d]; }
+  }
+  // maior autovalor de G (iteração de potência) para o passo do gradiente
+  let v = new Array(J).fill(1), lam = 1;
+  for (let it = 0; it < 60; it++) { const g = G.map(r => r.reduce((s, x, k) => s + x * v[k], 0)); lam = Math.hypot(...g); v = g.map(x => x / (lam || 1)); }
+  const passo = 1 / (lam || 1);
+  let B = ORIG.map(o => DEST.map(d => d.k === o.k ? 1 : (DEST.some(dd => dd.k === o.k) ? 0 : 1 / D)));
+  for (let it = 0; it < 4000; it++) {
+    const GB = G.map(r => DEST.map((_, d) => r.reduce((s, x, k) => s + x * B[k][d], 0)));
+    B = B.map((row, a) => projSimplex(row.map((b, d) => b - passo * (GB[a][d] - H[a][d]))));
+  }
+  return B;
+}
+function prever(x, B) { return DEST.map((_, d) => x.reduce((s, xa, a) => s + xa * B[a][d], 0)); }
+
+/* ---------- Dados ---------- */
+function fracoes1(l) { const te = l[2] || 1; return ORIG.map(o => l[o.i] / te); }
+function municipios() { return Object.entries(st.t1.mun); }
+
+function linhasCompletas(filtro) {
+  const out = [];
+  for (const [k, l] of municipios()) {
+    const r = st.t2[k]; if (!r || r.pst < 100 || !r.te) continue;
+    if (filtro && !filtro(k)) continue;
+    out.push({ k, x: fracoes1(l), y: r.y.map(v => v / r.te), w: r.te, te: r.te, yabs: r.y });
+  }
+  return out;
+}
+
+function projetar(B) {
+  let L = 0, F = 0, teFeito = 0, teTotal = 0, nFeito = 0;
+  for (const [k, l] of municipios()) {
+    const te = l[2]; if (!te) continue; teTotal += te;
+    const r = st.t2[k];
+    if (r && r.pst >= 100) { L += r.y[0]; F += r.y[1]; teFeito += te; nFeito++; }
+    else { const p = prever(fracoes1(l), B); L += p[0] * te; F += p[1] * te; }
+  }
+  return { L, F, pL: L / (L + F) * 100, nFeito, fracEleit: teFeito / teTotal * 100 };
+}
+function faixaErro(linhas) {
+  // reestima em metades sorteadas e mede o erro na outra metade (percentual de Lula nos válidos)
+  const erros = [];
+  for (let rep = 0; rep < 12; rep++) {
+    const a = [], b = []; linhas.forEach(l => (Math.random() < 0.5 ? a : b).push(l));
+    if (a.length < 50 || b.length < 50) continue;
+    const B = ajustar(a);
+    let pl = 0, pf = 0, rl = 0, rf = 0;
+    b.forEach(l => { const p = prever(l.x, B); pl += p[0] * l.te; pf += p[1] * l.te; rl += l.yabs[0]; rf += l.yabs[1]; });
+    erros.push(pl / (pl + pf) * 100 - rl / (rl + rf) * 100);
+  }
+  if (!erros.length) return null;
+  return Math.sqrt(erros.reduce((s, e) => s + e * e, 0) / erros.length);
+}
+
+/* ---------- Simulação (para testar antes das 17h) ---------- */
+const VERDADE = { // fatias reais escolhidas para o teste: linha = origem, colunas = Lula, Flávio, branco, nulo, abstenção
+  abst: [0.07, 0.06, 0.005, 0.005, 0.86], br: [0.15, 0.12, 0.45, 0.13, 0.15], nu: [0.14, 0.14, 0.10, 0.47, 0.15],
+  '13': [0.95, 0.01, 0.005, 0.005, 0.03], '22': [0.01, 0.95, 0.005, 0.005, 0.03], '70': [0.34, 0.42, 0.06, 0.08, 0.10],
+  '14': [0.12, 0.66, 0.06, 0.08, 0.08], '55': [0.15, 0.68, 0.04, 0.05, 0.08], '30': [0.20, 0.62, 0.05, 0.05, 0.08],
+  out: [0.45, 0.20, 0.10, 0.12, 0.13]
+};
+function simular() {
+  st.verdade = VERDADE;
+  const ks = municipios();
+  st.simPasso++;
+  const alvo = Math.min(1, st.simPasso * 0.12); // a cada leitura, mais 12% das cidades fecham
+  ks.forEach(([k, l], i) => {
+    if (st.t2[k]) return;
+    const sorteio = ((i * 2654435761) % 1000) / 1000; // ordem fixa; cidades pequenas tendem a fechar antes
+    const peso = Math.min(1, 0.3 + Math.log10(l[2] + 10) / 8);
+    if (sorteio * peso > alvo) return;
+    const te = l[2];
+    const regiao = k.slice(0, 2), ruido = (['ba', 'pe', 'ce', 'ma', 'pi', 'pb', 'rn', 'al', 'se'].includes(regiao) ? 0.03 : -0.01);
+    const y = [0, 0, 0, 0, 0];
+    ORIG.forEach(o => {
+      const linha = VERDADE[o.k].slice(); linha[0] += ruido * (o.k === '70' || o.k === 'out' ? 1 : 0); linha[1] -= ruido * (o.k === '70' || o.k === 'out' ? 1 : 0);
+      const tot = l[o.i];
+      linha.forEach((f, d) => { y[d] += tot * Math.max(0, f * (1 + (Math.random() - 0.5) * 0.1)); });
+    });
+    const soma = y.reduce((a, b) => a + b, 0) || 1;
+    st.t2[k] = { te, y: y.map(v => Math.round(v / soma * te)), pst: 100 };
+  });
+  // estados e Brasil somados a partir das cidades simuladas
+  const agreg = {};
+  for (const [k, l] of ks) {
+    const u = k.slice(0, 2); const a = agreg[u] ||= { te: 0, y: [0, 0, 0, 0, 0], feito: 0 };
+    a.te += l[2]; const r = st.t2[k]; if (r) { r.y.forEach((v, d) => a.y[d] += v); a.feito += l[2]; }
+  }
+  const br = { te: 0, y: [0, 0, 0, 0, 0], feito: 0 };
+  Object.entries(agreg).forEach(([u, a]) => {
+    st.uf[u] = { te: a.te, y: a.y, pst: a.feito / a.te * 100, vv: a.y[0] + a.y[1] };
+    br.te += a.te; br.feito += a.feito; a.y.forEach((v, d) => br.y[d] += v);
+  });
+  st.br = { te: br.te, y: br.y, pst: br.feito / br.te * 100, vv: br.y[0] + br.y[1], tf: 'n' };
+}
+
+/* ---------- Leitura real ---------- */
+async function lerTSE() {
+  const ufs = [...new Set(municipios().map(([k]) => k.slice(0, 2)))];
+  const [br, ...rs] = await Promise.all([getJSON(`${BASE}dados/br/br-c0001-e${ELE}-u.json`).then(ler2),
+    ...ufs.map(u => getJSON(`${BASE}dados/${u}/${u}-c0001-e${ELE}-u.json`).then(ler2).catch(() => null))]);
+  st.br = br; ufs.forEach((u, i) => { if (rs[i]) st.uf[u] = rs[i]; });
+  // andamento por município: busca só as cidades que acabaram de fechar
+  const abs = await emLotes(ufs, 8, u => getJSON(`${BASE}dados/${u}/${u}-e${ELE}-ab.json`));
+  const novas = [];
+  abs.forEach((ab, i) => (ab?.abr || []).forEach(m => {
+    const k = ufs[i] + m.cdabr;
+    if (num(m.s?.pst) >= 100 && !(st.t2[k]?.pst >= 100) && st.t1.mun[k]) novas.push([ufs[i], m.cdabr, k]);
+  }));
+  await emLotes(novas, 8, async ([u, cd, k]) => { st.t2[k] = ler2(await getJSON(`${BASE}dados/${u}/${u}${cd}-c0001-e${ELE}-u.json`)); });
+}
+
+async function ciclo() {
+  if (st.lendo) return; st.lendo = true; renderEstado();
+  try {
+    if (!st.t1) st.t1 = await (await fetch('primeiro-turno-municipios.json')).json();
+    if (SIMULAR) simular(); else await lerTSE();
+    const linhas = linhasCompletas();
+    const teFeito = linhas.reduce((s, l) => s + l.te, 0), teTot = municipios().reduce((s, [, l]) => s + l[2], 0);
+    if (linhas.length >= 300 && teFeito / teTot >= 0.03) {
+      st.beta = ajustar(linhas);
+      st.proj = { ...projetar(st.beta), erro: faixaErro(linhas), n: linhas.length };
+    } else { st.beta = linhas.length >= 60 ? ajustar(linhas) : null; st.proj = { n: linhas.length, fracEleit: teFeito / teTot * 100, cedo: true }; }
+    st.erro = null; st.ultima = new Date();
+  } catch (e) { st.erro = e; }
+  st.lendo = false; st.proxima = Date.now() + (SIMULAR ? 8 : INTERVALO) * 1000;
+  render();
+}
+
+/* ---------- Render ---------- */
+function render() { renderAvisos(); renderProj(); renderTransf(); renderFalta(); renderComp(); renderEstado(); }
+
+function renderEstado() {
+  const seg = Math.max(0, Math.round((st.proxima - Date.now()) / 1000));
+  let s = '', t = '';
+  if (st.lendo) t = 'Lendo o TSE…';
+  else if (st.erro) { s = 'erro'; t = `Falha na leitura · nova tentativa em <span class="mono">${seg}s</span>`; }
+  else if (SIMULAR) { s = 'espera'; t = `<b>Simulação</b> · próxima rodada em <span class="mono">${seg}s</span>`; }
+  else if (!st.br?.pst) { s = 'espera'; t = `<b>Aguardando divulgação</b> · nova leitura em <span class="mono">${seg}s</span>`; }
+  else { s = 'vivo'; t = `<b>Ao vivo</b> · lido às <span class="mono">${st.ultima?.toLocaleTimeString('pt-BR') || ''}</span> · próxima em <span class="mono">${seg}s</span>`; }
+  $('estado').dataset.s = s; $('estado-txt').innerHTML = t;
+}
+function renderAvisos() {
+  const a = [];
+  if (SIMULAR) a.push(`<div class="aviso"><b>Modo de teste com dados inventados.</b> O 2º turno de cada cidade foi gerado a partir do 1º turno real com uma matriz de transferência conhecida, mostrada entre parênteses na tabela, para conferir se o modelo a recupera. <a href="analise.html">Ver com os dados reais</a>.</div>`);
+  else if (st.br && !st.br.pst) a.push(`<div class="aviso">A divulgação começa às 17h de Brasília. Até lá, veja o <a href="analise.html?simular=1">modo de teste</a>, que mostra como esta página se comporta com dados inventados.</div>`);
+  if (st.erro) a.push(`<div class="aviso">${esc(st.erro.message)}</div>`);
+  $('avisos').innerHTML = a.join('');
+}
+function renderProj() {
+  const p = st.proj;
+  if (!p) { $('proj').innerHTML = '<p class="vazio">Carregando…</p>'; return; }
+  if (p.cedo) { $('proj').innerHTML = `<p class="vazio">Ainda cedo: ${fmt.format(p.n)} cidades totalizadas (${P1(p.fracEleit || 0)} do eleitorado). A projeção aparece com 300 cidades e 3% do eleitorado.</p>`; return; }
+  const pF = 100 - p.pL, e = p.fracEleit >= 99.9 ? null : p.erro;
+  const band = e ? `<span class="banda" style="left:${p.pL - 1.96 * e}%;width:${3.92 * e}%"></span>` : '';
+  const atual = st.br?.vv ? `${P2(st.br.y[0] / (st.br.y[0] + st.br.y[1]) * 100)} × ${P2(st.br.y[1] / (st.br.y[0] + st.br.y[1]) * 100)} com ${P2(st.br.pst)} das seções` : '—';
+  $('proj').innerHTML = `
+    <div class="proj">
+      <div class="pc" style="--cor:var(--c13)"><span class="nome">Lula</span><span class="pct">${P1(p.pL)}</span>${e ? `<span class="faixa">entre ${P1(p.pL - 1.96 * e)} e ${P1(p.pL + 1.96 * e)}</span>` : ''}</div>
+      <div class="pc dir" style="--cor:var(--c22)"><span class="nome">Flávio Bolsonaro</span><span class="pct">${P1(pF)}</span>${e ? `<span class="faixa">entre ${P1(pF - 1.96 * e)} e ${P1(pF + 1.96 * e)}</span>` : ''}</div>
+    </div>
+    <div class="placar"><i style="width:${p.pL}%;background:var(--c13)"></i><i style="flex:1;background:var(--c22)"></i><span class="meio"></span>${band}</div>
+    <div class="linha-info"><span>Base: <b>${fmt.format(p.n)}</b> cidades totalizadas, <b>${P1(p.fracEleit)}</b> do eleitorado</span><span>Contagem oficial agora: <b>${atual}</b></span></div>`;
+}
+function renderTransf() {
+  $('leg-transf').innerHTML = DEST.map(d => `<span><i style="background:${d.cor}"></i>${d.nome}</span>`).join('');
+  const B = st.beta;
+  const tot1 = ORIG.map(o => municipios().reduce((s, [, l]) => s + l[o.i], 0));
+  const teTot = municipios().reduce((s, [, l]) => s + l[2], 0);
+  $('tab-transf').innerHTML = `<thead><tr><th>No 1º turno</th><th class="n">Eleitores</th><th>Como votaram no 2º</th>${DEST.map(d => `<th class="n">${d.nome}</th>`).join('')}</tr></thead><tbody>` +
+    ORIG.map((o, a) => {
+      const row = B ? B[a] : null, ver = st.verdade?.[o.k];
+      const fraco = tot1[a] / teTot < 0.04;
+      return `<tr><td>${o.nome}${fraco ? '<br><span class="real">grupo pequeno: estimativa pouco confiável</span>' : ''}</td><td class="n">${fmt.format(tot1[a])}</td>
+        <td>${row ? `<div class="pilha">${row.map((f, d) => `<i style="width:${f * 100}%;background:${DEST[d].cor}" title="${DEST[d].nome}: ${P1(f * 100)}"></i>`).join('')}</div>` : '<span class="vazio">aguardando cidades totalizadas</span>'}</td>
+        ${DEST.map((_, d) => `<td class="n">${row ? P1(row[d] * 100) : '—'}${ver ? `<br><span class="real">(${P1(ver[d] * 100)})</span>` : ''}</td>`).join('')}</tr>`;
+    }).join('') + '</tbody>';
+}
+function renderFalta() {
+  const ufs = Object.entries(st.uf);
+  if (!ufs.length || !st.br) { $('tab-falta').innerHTML = ''; $('falta-resumo').textContent = ''; return; }
+  // comparecimento e válidos esperados no que falta: taxa do 1º turno de cada estado
+  const t1uf = {};
+  for (const [k, l] of municipios()) { const u = k.slice(0, 2); const a = t1uf[u] ||= { te: 0, val: 0 }; a.te += l[2]; a.val += l.slice(6, 13).reduce((s, v) => s + v, 0); }
+  const rows = ufs.map(([u, d]) => {
+    const resto = d.te * (1 - d.pst / 100);
+    const valEsp = resto * (t1uf[u] ? t1uf[u].val / t1uf[u].te : 0.75);
+    const lid = d.y[0] === d.y[1] ? null : (d.y[0] > d.y[1] ? '13' : '22');
+    const pl = d.y[0] + d.y[1] ? d.y[0] / (d.y[0] + d.y[1]) * 100 : null;
+    return { u, d, resto, valEsp, lid, pl };
+  }).sort((a, b) => b.resto - a.resto);
+  const R = rows.reduce((s, r) => s + r.valEsp, 0);
+  const L = st.br.y[0], F = st.br.y[1];
+  if (R > 0 && L + F > 0 && L !== F) {
+    const lider = L > F ? 'Lula' : 'Flávio Bolsonaro', atras = L > F ? 'Flávio Bolsonaro' : 'Lula';
+    const precisa = (Math.abs(L - F) + R) / (2 * R) * 100;
+    $('falta-resumo').innerHTML = precisa > 100
+      ? `${esc(atras)} não alcança mais ${esc(lider)}, mesmo com todos os cerca de ${fmt.format(Math.round(R))} votos válidos que faltam.`
+      : `Para virar, ${esc(atras)} precisa de <b>${P1(precisa)}</b> dos cerca de ${fmt.format(Math.round(R))} votos válidos que faltam.`;
+  } else $('falta-resumo').textContent = st.br.pst ? '' : 'Nenhum voto apurado ainda.';
+  $('tab-falta').innerHTML = `<thead><tr><th>Estado</th><th class="n">Apurado</th><th class="n">Eleitores a apurar</th><th class="n">Válidos esperados</th><th>Quem lidera</th><th class="n">Lula</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${r.u === 'zz' ? 'Exterior' : r.u.toUpperCase()}</td><td class="n">${P1(r.d.pst)}</td><td class="n">${fmt.format(Math.round(r.resto))}</td>
+      <td class="n">${fmt.format(Math.round(r.valEsp))}</td><td>${r.lid ? `<span style="color:var(--c${r.lid})">●</span> ${r.lid === '13' ? 'Lula' : 'Flávio'}` : '<span class="vazio">—</span>'}</td>
+      <td class="n">${r.pl == null ? '—' : P1(r.pl)}</td></tr>`).join('') + '</tbody>';
+}
+function renderComp() {
+  const t1uf = {};
+  for (const [k, l] of municipios()) { const u = k.slice(0, 2); const a = t1uf[u] ||= { val: 0, l: 0, f: 0 }; a.val += l.slice(6, 13).reduce((s, v) => s + v, 0); a.l += l[6]; a.f += l[7]; }
+  const rows = Object.entries(t1uf).map(([u, a]) => {
+    const d = st.uf[u]; const v2 = d ? d.y[0] + d.y[1] : 0;
+    return { u, l1: a.l / a.val * 100, f1: a.f / a.val * 100, l2: v2 ? d.y[0] / v2 * 100 : null, f2: v2 ? d.y[1] / v2 * 100 : null };
+  }).sort((a, b) => (a.l2 == null) - (b.l2 == null) || ((b.l2 ?? 0) - b.l1) - ((a.l2 ?? 0) - a.l1));
+  const dlt = (v, cor) => v == null ? '—' : `<span style="color:${cor}">${v >= 0 ? '+' : '−'}${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(Math.abs(v))}</span>`;
+  $('tab-comp').innerHTML = `<thead><tr><th>Estado</th><th class="n">Lula 1º</th><th class="n">Lula 2º</th><th class="n">Ganho</th><th class="n">Flávio 1º</th><th class="n">Flávio 2º</th><th class="n">Ganho</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${r.u === 'zz' ? 'Exterior' : r.u.toUpperCase()}</td><td class="n">${P1(r.l1)}</td><td class="n">${r.l2 == null ? '—' : P1(r.l2)}</td><td class="n">${dlt(r.l2 == null ? null : r.l2 - r.l1, 'var(--c13)')}</td>
+      <td class="n">${P1(r.f1)}</td><td class="n">${r.f2 == null ? '—' : P1(r.f2)}</td><td class="n">${dlt(r.f2 == null ? null : r.f2 - r.f1, 'var(--c22)')}</td></tr>`).join('') + '</tbody>';
+}
+
+setInterval(() => { renderEstado(); if (!st.lendo && st.proxima && Date.now() >= st.proxima) ciclo(); }, 1000);
+ciclo();
+</script>
+</body>
+</html>
