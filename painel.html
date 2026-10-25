@@ -102,7 +102,7 @@ th.grupo { text-align: center; border-bottom: 0; }
       </div>
     </div>
     <div class="mapa-paises">
-      <div><div class="mapa" id="mapa"></div>
+      <div><div id="mapa" style="max-width:520px;margin:0 auto"></div>
         <div class="leg" style="justify-content:center;margin-top:10px"><span style="--cor:var(--c13)"><i style="height:8px;width:24px"></i>Lula na frente</span><span style="--cor:var(--c22)"><i style="height:8px;width:24px"></i>Flávio na frente</span><span>cor mais forte = vantagem maior</span></div>
       </div>
       <div class="paises"><h2 style="margin-bottom:6px">Exterior, por país</h2><div class="rolagem" style="max-height:470px;overflow-y:auto"><table id="paises"></table></div></div>
@@ -230,7 +230,30 @@ const PAIS = (() => {
   };
   const m = {}; Object.entries(t).forEach(([p, cs]) => cs.split(' ').filter(Boolean).forEach(c => { m[c] = p; })); return m;
 })();
-let fonteMapa = 'tse', ultimo = null;
+let fonteMapa = 'tse', ultimo = null, GEO = null;
+fetch('dados/brasil-ufs.json').then(r => r.json()).then(g => { GEO = g; if (ultimo) renderMapa(...ultimo); }).catch(() => {});
+// estados pequenos do litoral: rótulo deslocado para o mar, com linha
+const FORA = { rn: [2.6, 0.2], pb: [2.9, 0], pe: [3.4, 0.4], al: [2.9, 0.6], se: [2.7, 1.0], es: [2.4, 0.4], rj: [2.2, 1.6], df: [0, 0] };
+function desenharMapa(cor) {
+  if (!GEO) { $('mapa').innerHTML = '<p class="vazio">Carregando o mapa…</p>'; return; }
+  const k = Math.cos(15 * Math.PI / 180), X = lon => (lon + 74) * k * 20, Y = lat => (6 - lat) * 20;
+  let paths = '', rot = '';
+  Object.entries(GEO).forEach(([u, aneis]) => {
+    const c = cor(u);
+    const d = aneis.map(r => 'M' + r.map(([lo, la]) => `${X(lo).toFixed(1)},${Y(la).toFixed(1)}`).join('L') + 'Z').join('');
+    paths += `<path d="${d}" fill="${c.bg}" stroke="var(--surface)" stroke-width="1.2"><title>${u.toUpperCase()}${c.quem ? `: ${c.quem} ${c.txt}` : ': sem votos'}</title></path>`;
+    // centro do maior anel para o rótulo
+    const anel = aneis.reduce((a, b) => (b.length > a.length ? b : a));
+    let sx = 0, sy = 0; anel.forEach(([lo, la]) => { sx += lo; sy += la; });
+    const cx = sx / anel.length, cy = sy / anel.length, off = FORA[u];
+    const tx = X(cx + (off ? off[0] : 0)), ty = Y(cy - (off ? off[1] : 0));
+    const claro = c.claro && !(off && (off[0] || off[1]));
+    if (off && (off[0] || off[1])) rot += `<line x1="${X(cx)}" y1="${Y(cy)}" x2="${tx - 4}" y2="${ty - 3}" stroke="var(--muted)" stroke-width=".8"/>`;
+    rot += `<text x="${tx}" y="${ty}" text-anchor="${off && off[0] ? 'start' : 'middle'}" style="fill:${claro ? '#fff' : 'var(--fg)'};font:600 ${u === 'df' ? 9 : 12}px var(--display)">${u.toUpperCase()}</text>`;
+    if (c.quem && u !== 'df') rot += `<text x="${tx}" y="${ty + 12}" text-anchor="${off && off[0] ? 'start' : 'middle'}" style="fill:${claro ? '#fff' : 'var(--fg)'};font:10px var(--body)">${c.txt}</text>`;
+  });
+  $('mapa').innerHTML = `<svg viewBox="0 8 830 790" width="100%" role="img" aria-label="Mapa do Brasil por estado, colorido por quem lidera">${paths}${rot}</svg>`;
+}
 document.getElementById('fonte-mapa').addEventListener('click', ev => {
   const b = ev.target.closest('button'); if (!b) return; fonteMapa = b.dataset.f;
   document.querySelectorAll('#fonte-mapa button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
@@ -245,13 +268,12 @@ function tom(l, f) {
 function renderMapa(e, m) {
   ultimo = [e, m];
   const tufs = (m && m.ufs) || {};
-  $('mapa').innerHTML = Object.entries(MOSAICO).map(([u, [c, r]]) => {
+  desenharMapa(u => {
     let l = 0, f = 0;
     if (fonteMapa === 'tse') { const t = tufs[u]; if (t) { l = t.y[0]; f = t.y[1]; } }
     else { const b = e.bu.ufs[u]; if (b) { l = b.lula; f = b.flavio; } }
-    const t = tom(l, f), quem = !l && !f ? '' : (l >= f ? 'Lula' : 'Flávio');
-    return `<div class="tile${t.claro ? ' claro' : ''}" style="grid-column:${c + 1};grid-row:${r + 1};background:${t.bg}" title="${u.toUpperCase()}${quem ? ': ' + quem + ' ' + t.txt : ''}"><b>${u.toUpperCase()}</b><span>${t.txt}</span></div>`;
-  }).join('');
+    return { ...tom(l, f), quem: !l && !f ? '' : (l >= f ? 'Lula' : 'Flávio') };
+  });
   // países: TSE quando já houver voto totalizado; senão, soma dos boletins
   const tz = (m && m.exterior_tse) || {}, bz = e.bu.exterior_cidades || {};
   const paises = {};
